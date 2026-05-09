@@ -1,0 +1,123 @@
+{
+  "project_name": "Driftask",
+  "domain": "CRM Mobile App",
+  "theme": "Light",
+  "archetype": "Archetype 4: Swiss & High-Contrast",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "DM Sans",
+    "scales": {
+      "h1": {
+        "fontSize": 36,
+        "fontWeight": "bold",
+        "tracking": -0.5
+      },
+      "h2": {
+        "fontSize": 28,
+        "fontWeight": "bold",
+        "tracking": -0.3
+      },
+      "h3": {
+        "fontSize": 20,
+        "fontWeight": "600",
+        "tracking": -0.2
+      },
+      "body": {
+        "fontSize": 16,
+        "fontWeight": "normal",
+        "tracking": 0,
+        "lineHeight": 24
+      },
+      "small": {
+        "fontSize": 14,
+        "fontWeight": "normal",
+        "tracking": 0.2
+      }
+    }
+  },
+  "colors": {
+    "background": "#FFFFFF",
+    "surface": "#F4F4F5",
+    "surface_elevated": "#FAFAFA",
+    "primary": "#002FA7",
+    "primary_foreground": "#FFFFFF",
+    "text_main": "#0A0A0A",
+    "text_muted": "#52525B",
+    "border": "#E4E4E7",
+    "accent_success": "#10B981",
+    "accent_warning": "#F59E0B",
+    "accent_danger": "#EF4444"
+  },
+  "spacing_and_layout": {
+    "screen_padding": 24,
+    "element_gap": 16,
+    "border_radius_small": 4,
+    "border_radius_medium": 8,
+    "border_radius_large": 12
+  },
+  "component_rules": {
+    "cards": {
+      "backgroundColor": "#FFFFFF",
+      "borderWidth": 1,
+      "borderColor": "#E4E4E7",
+      "borderRadius": 8,
+      "shadow": "none (flat look)"
+    },
+    "buttons": {
+      "backgroundColor": "#002FA7",
+      "borderRadius": 4,
+      "paddingVertical": 16,
+      "paddingHorizontal": 24,
+      "alignItems": "center",
+      "justifyContent": "center"
+    },
+    "inputs": {
+      "backgroundColor": "#F4F4F5",
+      "borderRadius": 4,
+      "padding": 16,
+      "borderWidth": 1,
+      "borderColor": "transparent",
+      "focusBorderColor": "#002FA7"
+    },
+    "slides_and_carousels": {
+      "behavior": "Horizontal ScrollView with pagingEnabled=true",
+      "indicators": "Dot pagination (active: #002FA7, inactive: #E4E4E7)",
+      "visual_cue": "Reveal 10% of the next card to encourage swiping"
+    }
+  },
+  "media": {
+    "onboarding_slides": [
+      {
+        "title": "Data & Analytics",
+        "description": "Minimalist 3D render of a clean geometric chart",
+        "url": "https://static.prod-images.emergentagent.com/jobs/3472c0c2-7d28-4432-9ef9-f54b32b92706/images/662d4d16432741b375a88e8082c4ab97f203aa4f2b879bb9a063ceacf85317b3.png"
+      },
+      {
+        "title": "Workflow Organization",
+        "description": "Minimalist 3D render of a sleek kanban board",
+        "url": "https://static.prod-images.emergentagent.com/jobs/3472c0c2-7d28-4432-9ef9-f54b32b92706/images/3b30471e10b35424694b7c0d620a2a586bd8c534ced8da8e45ddec9c33c5f1c7.png"
+      },
+      {
+        "title": "Contacts & CRM",
+        "description": "Minimalist 3D render of a network of connected profile nodes",
+        "url": "https://static.prod-images.emergentagent.com/jobs/3472c0c2-7d28-4432-9ef9-f54b32b92706/images/dfc72d98341fc2518c72b1a8fd7f36f8876d922c046c377a243b1e2093701a77.png"
+      }
+    ],
+    "avatars": [
+      "https://images.unsplash.com/photo-1581065178047-8ee15951ede6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwzfHxidXNpbmVzcyUyMHByb2Zlc3Npb25hbCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3ODE2NzY2MHww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1629507208649-70919ca33793?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMHByb2Zlc3Npb25hbCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3ODE2NzY2MHww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1629507313712-f21468afdf2e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxidXNpbmVzcyUyMHByb2Zlc3Npb25hbCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3ODE2NzY2MHww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHw0fHxidXNpbmVzcyUyMHByb2Zlc3Npb25hbCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3ODE2NzY2MHww&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Tech Stack: React Native (Expo) - Mobile App. MUST USE .js files instead of .tsx for React components.",
+    "Icons: Use lucide-react-native. Do not use standard emoji icons.",
+    "Interaction: Heavy use of horizontal slides. Use standard React Native ScrollView with pagingEnabled={true} for carousels (Onboarding, Pipeline stages).",
+    "Authentication: JWT custom auth with slide transitions between Login and Register.",
+    "Dashboard: Implement a bento-grid style structure using native Flexbox. Use solid flat surfaces with 1px border. No heavy drop-shadows.",
+    "Kanban / Pipeline: Should be horizontally swipeable stages. Each stage is a vertical ScrollView of deal cards.",
+    "Testing: Critical - All interactive and key informational elements MUST include a data-testid attribute to facilitate automated testing.",
+    "Do not use generic UI libraries that bloat the app. Build custom high-contrast UI components using React Native StyleSheet."
+  ]
+}
