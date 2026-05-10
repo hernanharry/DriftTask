@@ -1,0 +1,44 @@
+{
+  "summary": "Driftask CRM iteration 2 review (Drive backup/restore + contact detail w/ notes + task due_date + EN/ES i18n). Backend: 38/38 pytest cases passed including 6 Drive endpoint tests (status, exchange-bad-code 400, backup-not-connected 400, list-not-connected 400, disconnect idempotent, auth required), 3 notes-filtering tests (contact_id and deal_id), 2 task due_date persistence tests, plus full regression on auth/contacts/deals/tasks/dashboard. Frontend: login -> dashboard -> contacts (add) -> contact detail screen with composer + notes timeline (note appeared) -> tasks (Set reminder button visible, save without due_date works) -> profile (Drive Connect button present and clickable without crash, language toggle EN->ES translates all UI - Panel/Contactos/Pipeline/Tareas/Perfil/Conectar Google Drive/Cerrar sesion - persists in AsyncStorage as driftask_lang=es and survives reload).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/drive/auth/exchange", "issue": "Catches Google-side 4xx response and re-raises as HTTP 400 with verbatim Google error in detail. Functionally fine, but consider stripping internal Google error fields before returning to client (information disclosure risk if upstream error leaks token-exchange diagnostics)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "expo-notifications on web", "issue": "Console warning 'Listening to push token changes is not yet fully supported on web.' fires on every page load. Expected on web preview - native iOS/Android behavior unaffected. No action required, but consider gating registerForPushNotificationsAsync behind Platform.OS !== 'web' to silence the warning."},
+      {"component": "TouchableOpacity (legacy prop)", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' fires from a third-party RN component. Cosmetic only."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_driftask_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: align expo package versions per `expo doctor` (datetimepicker, expo-auth-session, expo-crypto, expo-localization, expo-notifications, expo-web-browser). App works on the current versions but pinning will reduce upgrade surprises.",
+    "OPTIONAL: in /app/backend/server.py drive_auth_exchange, sanitize the upstream Google error before bubbling it to the client (do not echo r.text verbatim).",
+    "OPTIONAL: gate expo-notifications setup behind Platform.OS !== 'web' to avoid console warnings in the web preview."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 668 lines (was 436) after Drive endpoints were added. Approaching the 700-line threshold; recommend splitting into routers/{auth,contacts,deals,tasks,notes,drive,dashboard}.py for the next iteration.",
+    "Drive multipart upload body is built manually with a hard-coded boundary string. Works for small JSON payloads but consider httpx multipart helpers or a dedicated lib for resumable uploads if backups grow >5MB.",
+    "drive_restore performs delete_many on contacts/deals/tasks/notes BEFORE inserting the restore payload. If the inserts fail mid-way the user data is gone. Wrap in a transaction or stage to a temp collection then swap.",
+    "GOOGLE_CLIENT_SECRET is committed in /app/backend/.env (visible to anyone with repo access). Acceptable for preview, but rotate before production and move to a secrets manager."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration2.py (created)",
+    "/app/test_reports/pytest/pytest_results.xml (regenerated)"
+  ],
+  "success_rate": {"backend": "100% (38/38)", "frontend": "100% (all critical flows)"},
+  "seed_data_creation": "Used existing demo@driftask.app / demo123 user. Created TEST_-prefixed contacts/deals/tasks/notes during runs and deleted them after testing (verified empty). One throwaway user `test_drive_*@driftask.app` registered per run for Drive isolation tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Public URL: https://driftask-connect.preview.emergentagent.com (different from the URL noted in the review_request - frontend/.env value is canonical). Demo creds in /app/memory/test_credentials.md. New testIDs in iteration 2: drive-connect-btn / drive-backup-btn / drive-list-btn / drive-disconnect-btn / drive-card / language-sheet / lang-en / lang-es / profile-language-btn / contact-detail-back / note-input / note-send-btn / notes-empty / note-<id> / task-due-set-btn / task-due-clear-btn. Field testIDs in modals are bare names (e.g. contact-name, contact-email) - no -input suffix. Run all backend tests with: pytest /app/backend/tests/ -v. OAuth Drive flow cannot be completed in headless automation; only verified the connect button initiates the flow without crashing.",
+  "rca_of_issue": "No bugs blocking acceptance. All 18 items in the review_request feature list verified. Drive endpoints correctly return 400 'Drive not connected' rather than 500 when no tokens exist. Notes filter by contact_id and deal_id returns the right subset. Task due_date is accepted as ISO string and persisted. EN/ES toggle translates the whole tab bar + headings + Drive section + auth strings, persists across reloads via AsyncStorage key driftask_lang."
+}

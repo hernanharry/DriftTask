@@ -11,7 +11,10 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timedelta, timezone
 import bcrypt
+import httpx
+import json as json_lib
 from jose import JWTError, jwt
+from fastapi.responses import HTMLResponse
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -25,6 +28,10 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
 JWT_EXPIRE_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', 168))
+
+# Google OAuth
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 
 app = FastAPI(title="Driftask CRM API")
 api_router = APIRouter(prefix="/api")
@@ -408,6 +415,232 @@ async def dashboard_stats(user=Depends(get_current_user)):
         "pipeline_value": pipeline_value,
         "conversion_rate": conversion,
         "deals_by_stage": by_stage,
+    }
+
+
+# ---------------- GOOGLE DRIVE ----------------
+class DriveAuthExchange(BaseModel):
+    code: str
+    redirect_uri: str
+    code_verifier: Optional[str] = None
+
+
+@api_router.get("/drive/status")
+async def drive_status(user=Depends(get_current_user)):
+    record = await db.drive_tokens.find_one({"user_id": user["id"]}, {"_id": 0, "access_token": 0, "refresh_token": 0})
+    return {"connected": record is not None, "email": record.get("email") if record else None}
+
+
+@api_router.post("/drive/auth/exchange")
+async def drive_auth_exchange(payload: DriveAuthExchange, user=Depends(get_current_user)):
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google credentials not configured")
+    data = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "code": payload.code,
+        "grant_type": "authorization_code",
+        "redirect_uri": payload.redirect_uri,
+    }
+    if payload.code_verifier:
+        data["code_verifier"] = payload.code_verifier
+    async with httpx.AsyncClient() as hclient:
+        r = await hclient.post("https://oauth2.googleapis.com/token", data=data, timeout=15.0)
+    if r.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {r.text}")
+    tokens = r.json()
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    expires_in = tokens.get("expires_in", 3600)
+
+    email = None
+    async with httpx.AsyncClient() as hclient:
+        u = await hclient.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10.0,
+        )
+        if u.status_code == 200:
+            email = u.json().get("email")
+
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    update = {
+        "user_id": user["id"],
+        "access_token": access_token,
+        "expires_at": expires_at,
+        "email": email,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if refresh_token:
+        update["refresh_token"] = refresh_token
+    await db.drive_tokens.update_one({"user_id": user["id"]}, {"$set": update}, upsert=True)
+    return {"connected": True, "email": email}
+
+
+@api_router.post("/drive/disconnect")
+async def drive_disconnect(user=Depends(get_current_user)):
+    await db.drive_tokens.delete_one({"user_id": user["id"]})
+    return {"connected": False}
+
+
+async def _get_drive_access_token(user_id: str) -> str:
+    record = await db.drive_tokens.find_one({"user_id": user_id})
+    if not record:
+        raise HTTPException(status_code=400, detail="Drive not connected")
+    expires_at = record.get("expires_at")
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at > datetime.now(timezone.utc) + timedelta(seconds=60):
+        return record["access_token"]
+    refresh_token = record.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Drive session expired. Please reconnect.")
+    data = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+    async with httpx.AsyncClient() as hclient:
+        r = await hclient.post("https://oauth2.googleapis.com/token", data=data, timeout=15.0)
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Drive token refresh failed")
+    tokens = r.json()
+    access_token = tokens["access_token"]
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.get("expires_in", 3600))
+    await db.drive_tokens.update_one(
+        {"user_id": user_id},
+        {"$set": {"access_token": access_token, "expires_at": expires_at}},
+    )
+    return access_token
+
+
+async def _gather_user_data(user_id: str) -> dict:
+    contacts = [c async for c in db.contacts.find({"user_id": user_id}, {"_id": 0})]
+    deals = [d async for d in db.deals.find({"user_id": user_id}, {"_id": 0})]
+    tasks = [t async for t in db.tasks.find({"user_id": user_id}, {"_id": 0})]
+    notes = [n async for n in db.notes.find({"user_id": user_id}, {"_id": 0})]
+    return {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "contacts": contacts,
+        "deals": deals,
+        "tasks": tasks,
+        "notes": notes,
+    }
+
+
+@api_router.post("/drive/backup")
+async def drive_backup(user=Depends(get_current_user)):
+    access_token = await _get_drive_access_token(user["id"])
+    payload = await _gather_user_data(user["id"])
+    body = json_lib.dumps(payload, default=str).encode("utf-8")
+    filename = f"driftask_backup_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+    metadata = {"name": filename, "parents": ["appDataFolder"]}
+    boundary = "driftaskboundary"
+    multipart_body = (
+        f"--{boundary}\r\n"
+        f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+        f"{json_lib.dumps(metadata)}\r\n"
+        f"--{boundary}\r\n"
+        f"Content-Type: application/json\r\n\r\n"
+    ).encode("utf-8") + body + f"\r\n--{boundary}--".encode("utf-8")
+    async with httpx.AsyncClient() as hclient:
+        r = await hclient.post(
+            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": f"multipart/related; boundary={boundary}",
+            },
+            content=multipart_body,
+            timeout=60.0,
+        )
+    if r.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail=f"Drive upload failed: {r.text}")
+    f = r.json()
+    return {
+        "ok": True,
+        "file_id": f.get("id"),
+        "filename": filename,
+        "counts": {
+            "contacts": len(payload["contacts"]),
+            "deals": len(payload["deals"]),
+            "tasks": len(payload["tasks"]),
+            "notes": len(payload["notes"]),
+        },
+    }
+
+
+@api_router.get("/drive/backups")
+async def drive_list_backups(user=Depends(get_current_user)):
+    access_token = await _get_drive_access_token(user["id"])
+    async with httpx.AsyncClient() as hclient:
+        r = await hclient.get(
+            "https://www.googleapis.com/drive/v3/files",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={
+                "spaces": "appDataFolder",
+                "fields": "files(id,name,createdTime,size)",
+                "orderBy": "createdTime desc",
+                "pageSize": 50,
+            },
+            timeout=15.0,
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Drive list failed: {r.text}")
+    return r.json().get("files", [])
+
+
+@api_router.post("/drive/restore/{file_id}")
+async def drive_restore(file_id: str, user=Depends(get_current_user)):
+    access_token = await _get_drive_access_token(user["id"])
+    async with httpx.AsyncClient() as hclient:
+        r = await hclient.get(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=30.0,
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Drive download failed: {r.text}")
+    try:
+        payload = r.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid backup file")
+
+    uid = user["id"]
+    await db.contacts.delete_many({"user_id": uid})
+    await db.deals.delete_many({"user_id": uid})
+    await db.tasks.delete_many({"user_id": uid})
+    await db.notes.delete_many({"user_id": uid})
+
+    def _restamp(items):
+        out = []
+        for it in items or []:
+            it = {k: v for k, v in it.items() if k != "_id"}
+            it["user_id"] = uid
+            out.append(it)
+        return out
+
+    contacts = _restamp(payload.get("contacts"))
+    deals = _restamp(payload.get("deals"))
+    tasks = _restamp(payload.get("tasks"))
+    notes = _restamp(payload.get("notes"))
+    if contacts:
+        await db.contacts.insert_many(contacts)
+    if deals:
+        await db.deals.insert_many(deals)
+    if tasks:
+        await db.tasks.insert_many(tasks)
+    if notes:
+        await db.notes.insert_many(notes)
+    return {
+        "ok": True,
+        "restored": {
+            "contacts": len(contacts),
+            "deals": len(deals),
+            "tasks": len(tasks),
+            "notes": len(notes),
+        },
     }
 
 

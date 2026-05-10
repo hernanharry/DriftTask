@@ -14,9 +14,10 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Plus, X, Mail, Phone, Building2, Trash2, Search } from "lucide-react-native";
 import { apiFetch } from "../../src/auth";
+import { useI18n } from "../../src/i18n";
 
 type Contact = {
   id: string;
@@ -36,6 +37,8 @@ const AVATARS = [
 ];
 
 export default function Contacts() {
+  const router = useRouter();
+  const { t } = useI18n();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -71,7 +74,7 @@ export default function Contacts() {
 
   const submit = async () => {
     if (!name.trim()) {
-      Alert.alert("Missing name", "Please enter a contact name");
+      Alert.alert(t("common.error"), t("contacts.errName"));
       return;
     }
     try {
@@ -118,7 +121,7 @@ export default function Contacts() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Contacts</Text>
+        <Text style={styles.title}>{t("contacts.title")}</Text>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => setShowModal(true)}
@@ -132,7 +135,7 @@ export default function Contacts() {
         <Search size={18} color="#52525B" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search contacts..."
+          placeholder={t("contacts.searchPh")}
           placeholderTextColor="#A1A1AA"
           value={search}
           onChangeText={setSearch}
@@ -146,12 +149,17 @@ export default function Contacts() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}
         ListEmptyComponent={
           <View style={styles.empty} testID="contacts-empty">
-            <Text style={styles.emptyTitle}>No contacts yet</Text>
-            <Text style={styles.emptyText}>Tap + to add your first contact</Text>
+            <Text style={styles.emptyTitle}>{t("contacts.empty")}</Text>
+            <Text style={styles.emptyText}>{t("contacts.emptySub")}</Text>
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.card} testID={`contact-card-${item.id}`}>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => router.push(`/(app)/contact/${item.id}`)}
+            testID={`contact-card-${item.id}`}
+            activeOpacity={0.7}
+          >
             <Image
               source={{ uri: item.avatar || AVATARS[0] }}
               style={styles.avatar}
@@ -185,7 +193,7 @@ export default function Contacts() {
             >
               <Trash2 size={16} color="#EF4444" />
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         )}
       />
 
@@ -196,17 +204,17 @@ export default function Contacts() {
             style={{ flex: 1 }}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Contact</Text>
+              <Text style={styles.modalTitle}>{t("contacts.new")}</Text>
               <TouchableOpacity onPress={() => setShowModal(false)} testID="contact-modal-close">
                 <X size={24} color="#0A0A0A" />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
-              <Field label="Name *" value={name} onChange={setName} testID="contact-name" />
-              <Field label="Email" value={email} onChange={setEmail} keyboardType="email-address" testID="contact-email" />
-              <Field label="Phone" value={phone} onChange={setPhone} keyboardType="phone-pad" testID="contact-phone" />
-              <Field label="Company" value={company} onChange={setCompany} icon={<Building2 size={16} color="#52525B" />} testID="contact-company" />
-              <Field label="Position" value={position} onChange={setPosition} testID="contact-position" />
+              <Field label={t("contacts.name")} value={name} onChange={setName} testID="contact-name" />
+              <Field label={t("auth.email")} value={email} onChange={setEmail} keyboardType="email-address" testID="contact-email" />
+              <Field label={t("contacts.phone")} value={phone} onChange={setPhone} keyboardType="phone-pad" testID="contact-phone" />
+              <Field label={t("contacts.company")} value={company} onChange={setCompany} icon={<Building2 size={16} color="#52525B" />} testID="contact-company" />
+              <Field label={t("contacts.position")} value={position} onChange={setPosition} testID="contact-position" />
 
               <TouchableOpacity
                 style={[styles.cta, saving && { opacity: 0.7 }]}
@@ -214,7 +222,7 @@ export default function Contacts() {
                 disabled={saving}
                 testID="contact-save-btn"
               >
-                <Text style={styles.ctaText}>{saving ? "Saving..." : "Save Contact"}</Text>
+                <Text style={styles.ctaText}>{saving ? t("common.loading") : t("contacts.save")}</Text>
               </TouchableOpacity>
             </ScrollView>
           </KeyboardAvoidingView>
